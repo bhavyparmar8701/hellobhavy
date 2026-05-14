@@ -20,7 +20,7 @@ jobs:
           port: ${{ secrets.PORT }}
 
           script: |
-            cd /var/www/html/003006%20vCarrd%20Backend
+            cd /var/www/html/hellobhavy
 
             git pull origin main
 

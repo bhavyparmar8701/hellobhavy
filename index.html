@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Cloud File Storage</title>
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div class="container">
+
+<h2 id="welcome">Welcome, User</h2>
+<h3>Cloud File Upload & Download</h3>
+
+<div class="upload-section">
+<input type="file" id="fileInput"><br><br>
+<button onclick="upload()">Upload</button>
+</div>
+
+<p id="status"></p>
+
+<hr>
+
+<button onclick="loadFiles()">Your Files</button>
+
+<div class="gallery-section">
+<h3>📸 My Photo Gallery</h3>
+<div class="photo-gallery" id="photoGallery"></div>
+</div>
+
+</div>
+
+<script>
+
+/* ================= HANDLE LOGIN TOKEN ================= */
+
+if (window.location.hash.includes("id_token")) {
+
+  const token = window.location.hash.split("id_token=")[1].split("&")[0];
+
+  localStorage.setItem("idToken", token);
+
+  // 🔥 reload page without hash (VERY IMPORTANT)
+  window.location.href = window.location.origin;
+}
+
+/* ================= JWT DECODE ================= */
+
+function parseJwt(token) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    return null;
+  }
+}
+
+/* ================= SET USERNAME ================= */
+
+function setUsername() {
+
+  const token = localStorage.getItem("idToken");
+
+  if (!token) return;
+
+  const payload = parseJwt(token);
+
+  if (!payload) return;
+
+  const username =
+    payload.name ||
+    payload["cognito:username"] ||
+    payload.email ||
+    "User";
+
+  document.getElementById("welcome").innerText =
+    "Welcome, " + username;
+}
+
+setUsername();
+
+/* ================= API BASE ================= */
+
+const API_BASE = "https://g2k6rjyskd.execute-api.ap-south-1.amazonaws.com";
+
+/* ================= UPLOAD ================= */
+
+function upload(){
+
+const file = document.getElementById("fileInput").files[0];
+const status = document.getElementById("status");
+
+if(!file){
+status.innerText = "Please select file";
+return;
+}
+
+const reader = new FileReader();
+
+reader.onload = function(){
+
+const base64Data = reader.result.split(",")[1];
+
+fetch(API_BASE + "/upload",{
+method:"POST",
+headers:{
+"Content-Type":"application/json",
+"Authorization": localStorage.getItem("idToken")
+},
+body:JSON.stringify({
+file_name:file.name,
+file_data:base64Data
+})
+})
+.then(res=>{
+if(res.ok){
+status.innerText="Upload Successful";
+loadFiles();
+}
+else{
+status.innerText="Upload Failed";
+}
+})
+.catch(()=>{
+status.innerText="Upload Error";
+});
+
+};
+
+reader.readAsDataURL(file);
+
+}
+
+/* ================= LOAD FILES ================= */
+
+function loadFiles(){
+
+fetch(API_BASE + "/files",{
+headers:{
+"Authorization": localStorage.getItem("idToken")
+}
+})
+.then(res=>res.json())
+.then(data=>{
+
+const gallery=document.getElementById("photoGallery");
+gallery.innerHTML="";
+
+const files=data.files || [];
+
+const imageFiles=files.filter(file=>{
+const ext=file.split(".").pop().toLowerCase();
+return ["jpg","jpeg","png","webp"].includes(ext);
+});
+
+if(imageFiles.length===0){
+gallery.innerHTML="No photos uploaded";
+return;
+}
+
+imageFiles.forEach(file=>{
+
+fetch(API_BASE + "/files?file=" + encodeURIComponent(file),{
+headers:{
+"Authorization": localStorage.getItem("idToken")
+}
+})
+.then(res=>res.json())
+.then(data=>{
+
+const card=document.createElement("div");
+
+const img=document.createElement("img");
+img.src=data.download_url;
+img.style.width="150px";
+img.style.margin="10px";
+
+const shareBtn=document.createElement("button");
+shareBtn.innerText="Share";
+shareBtn.onclick=function(){shareFile(file)};
+
+card.appendChild(img);
+card.appendChild(shareBtn);
+
+gallery.appendChild(card);
+
+});
+
+});
+
+});
+
+}
+
+/* ================= SHARE ================= */
+
+function shareFile(fileName){
+
+fetch(API_BASE + "/share?file=" + encodeURIComponent(fileName),{
+headers:{
+"Authorization": localStorage.getItem("idToken")
+}
+})
+.then(res=>res.json())
+.then(data=>{
+navigator.clipboard.writeText(data.share_url);
+alert("Share link copied");
+});
+
+}
+
+</script>
+
+</body>
+</html>

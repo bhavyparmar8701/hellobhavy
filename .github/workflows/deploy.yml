@@ -1,0 +1,33 @@
+name: Auto Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@v1.0.3
+
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.PORT }}
+
+          script: |
+            cd /var/www/html/003006%20vCarrd%20Backend
+
+            git pull origin main
+
+            composer install --no-interaction --prefer-dist --optimize-autoloader
+
+            php artisan config:clear
+            php artisan cache:clear
+            php artisan route:clear
+
+            sudo chmod -R 775 storage bootstrap/cache
